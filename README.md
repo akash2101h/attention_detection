@@ -24,7 +24,7 @@ pip install ultralytics opencv-python numpy scipy
 | `scipy` | Optional distance utilities |
 
 ### Step 3 – YOLO model download
-On the **first run**, YOLOv8 nano weights (~6 MB) download automatically.
+On the **first run**, YOLOv11 download automatically.
 No extra step needed. To pre-download manually:
 ```python
 from ultralytics import YOLO
@@ -48,7 +48,7 @@ python app.py --source classroom.mp4
 ### All CLI options
 ```
 --source      0 (webcam) or path to video file    default: 0
---model       YOLO weights file                   default: yolov8n.pt
+--model       YOLO weights file                   default: yolov11n.pt
 --conf        detection confidence 0.0–1.0        default: 0.40
 --width       frame width (px)                    default: 640
 --height      frame height (px)                   default: 480
@@ -214,10 +214,10 @@ python app.py --model yolov8s.pt
 ## 9. File Structure
 
 ```
-student_attention_system.py   ← single-file, fully self-contained
+app.py   
 README.md                     ← this guide
 classroom.mp4                 ← (optional) your test video
-yolov8n.pt                    ← auto-downloaded on first run
+yolov11n.pt                    ← auto-downloaded on first run
 ```
 
 ---
