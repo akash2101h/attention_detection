@@ -18,7 +18,7 @@ pip install ultralytics opencv-python numpy scipy
 
 | Package | Purpose |
 |---|---|
-| `ultralytics` | YOLOv8 (pre-trained, no training needed) |
+| `ultralytics` | YOLOv11 (pre-trained, no training needed) |
 | `opencv-python` | Video capture, image processing, display |
 | `numpy` | Array math, frame operations |
 | `scipy` | Optional distance utilities |
