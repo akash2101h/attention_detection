@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+venv/
+env/
+runs/
+classroom/
+student_behaviour/
+*.pt
+*.pth
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+yolo11n.pt
+yolo8n.pt
+yolo26n.pt

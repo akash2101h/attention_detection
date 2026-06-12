@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Student Attention Monitor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --green:     #2ea043;
+      --green-dim: #1a4a2a;
+      --red:       #da3633;
+      --red-dim:   #4a1a1a;
+      --yellow:    #d29922;
+      --accent:    #388bfd;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    /* ── Top bar ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    header h1 { font-size: 18px; font-weight: 600; letter-spacing: .3px; }
+    header .badge {
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+    .live-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 1.4s infinite;
+      margin-left: auto;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; }
+      50%      { opacity: .3; }
+    }
+    #fps-tag { color: var(--muted); font-size: 12px; }
+
+    /* ── Layout ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 0;
+      height: calc(100vh - 57px);
+    }
+
+    /* ── Video section ── */
+    .video-section {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    .cam-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .cam-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .cam-card.full { grid-column: span 2; }
+
+    .cam-label {
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .cam-label .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+
+    .cam-card img {
+      width: 100%;
+      display: block;
+      background: #000;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      padding: 20px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-y: auto;
+    }
+
+    .sidebar h2 {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .7px;
+      color: var(--muted);
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Stat cards ── */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .stat-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 12px;
+      text-align: center;
+    }
+    .stat-card .val {
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .stat-card .lbl { font-size: 11px; color: var(--muted); }
+    .stat-card.green .val { color: var(--green); }
+    .stat-card.red   .val { color: var(--red); }
+    .stat-card.blue  .val { color: var(--accent); }
+    .stat-card.total .val { color: var(--text); }
+
+    /* ── Attention bar ── */
+    .att-bar-wrap { margin-top: 4px; }
+    .att-bar-wrap .att-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .att-bar-bg {
+      height: 10px;
+      background: var(--bg);
+      border-radius: 5px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .att-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--green-dim), var(--green));
+      border-radius: 5px;
+      transition: width .6s ease;
+    }
+
+    /* ── Teacher status ── */
+    .teacher-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      font-size: 13px;
+      transition: background .4s;
+    }
+    .teacher-status.active   { background: var(--green-dim); border-color: var(--green); }
+    .teacher-status.inactive { background: var(--bg); }
+    .teacher-status .t-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .teacher-status.active   .t-dot { background: var(--green); }
+    .teacher-status.inactive .t-dot { background: var(--muted); }
+
+    /* ── Input Source Section ── */
+    .input-source-section { display: flex; flex-direction: column; gap: 12px; }
+
+    /* Camera quick buttons */
+    .cam-btn-row { display: flex; gap: 8px; }
+    .cam-btn {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 8px;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all .2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+    .cam-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .cam-btn.active-source { 
+      border-color: var(--green); 
+      background: var(--green-dim); 
+      color: var(--green); 
+    }
+    .cam-btn .cam-icon { font-size: 20px; }
+    .cam-btn .cam-label-text { font-size: 11px; }
+
+    /* Upload area */
+    .upload-area {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .2s;
+      background: var(--bg);
+      position: relative;
+    }
+    .upload-area:hover { border-color: var(--accent); }
+    .upload-area.dragover { border-color: var(--accent); background: rgba(56,139,253,0.08); }
+    .upload-area.uploading { border-color: var(--yellow); }
+    .upload-area.done { border-color: var(--green); background: var(--green-dim); }
+    .upload-area input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+    .upload-icon { font-size: 24px; margin-bottom: 6px; }
+    .upload-text { font-size: 12px; color: var(--muted); }
+    .upload-text strong { color: var(--accent); }
+    .upload-progress {
+      margin-top: 8px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      display: none;
+    }
+    .upload-progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      width: 0%;
+      transition: width .3s;
+    }
+
+    /* Status message */
+    .source-status {
+      font-size: 11px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      display: none;
+    }
+    .source-status.success { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); display: block; }
+    .source-status.error   { background: var(--red-dim);   color: var(--red);   border: 1px solid var(--red);   display: block; }
+    .source-status.info    { background: rgba(56,139,253,0.1); color: var(--accent); border: 1px solid var(--accent); display: block; }
+
+    /* Current source indicator */
+    .current-source {
+      font-size: 11px;
+      color: var(--muted);
+      padding: 6px 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      word-break: break-all;
+    }
+    .current-source span { color: var(--green); font-weight: 600; }
+
+    /* Advanced source row */
+    .advanced-toggle {
+      font-size: 11px;
+      color: var(--accent);
+      cursor: pointer;
+      text-align: center;
+      padding: 4px;
+    }
+    .advanced-toggle:hover { text-decoration: underline; }
+    .advanced-panel { display: none; flex-direction: column; gap: 8px; }
+    .advanced-panel.open { display: flex; }
+    .source-row { display: flex; gap: 8px; align-items: center; }
+    .source-row label { font-size: 12px; color: var(--muted); width: 52px; }
+    .source-row input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    /* Buttons */
+    .btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .2s;
+      width: 100%;
+    }
+    .btn:hover { opacity: .85; }
+    .btn.sm { padding: 6px 12px; font-size: 12px; }
+
+    /* ── Saved frames ── */
+    .saved-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .saved-grid img {
+      width: 100%;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: border-color .2s;
+    }
+    .saved-grid img:hover { border-color: var(--accent); }
+
+    /* ── History chart ── */
+    canvas#histChart {
+      width: 100% !important;
+      max-height: 120px;
+      background: var(--bg);
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .cam-grid { grid-template-columns: 1fr; }
+      .cam-card.full { grid-column: span 1; }
+      .sidebar { border-left: none; border-top: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <h1>Student Attention Monitor</h1>
+  <span class="badge">LIVE</span>
+  <div class="live-dot"></div>
+  <span id="fps-tag">-- fps</span>
+</header>
+
+<!-- ── Main layout ── -->
+<div class="layout">
+
+  <!-- ── Video feeds ── -->
+  <div class="video-section">
+    <div class="cam-grid">
+
+      <div class="cam-card full">
+        <div class="cam-label"><span class="dot"></span>Front Camera — Students</div>
+        <img id="frontFeed" src="/stream/front" alt="Front camera feed"/>
+      </div>
+
+      <div class="cam-card">
+        <div class="cam-label"><span class="dot"></span>Back Camera — Teacher / Board</div>
+        <img id="backFeed" src="/stream/back" alt="Back camera feed"/>
+      </div>
+
+      <div class="cam-card" id="savedPreviewCard" style="display:none;">
+        <div class="cam-label">Saved Frame Preview</div>
+        <img id="savedPreview" src="" alt="Saved frame" style="max-height:200px;object-fit:contain;"/>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Sidebar ── -->
+  <div class="sidebar">
+
+    <!-- Stats -->
+    <div>
+      <h2>Live Statistics</h2>
+      <div class="stat-grid" style="margin-top:12px;">
+        <div class="stat-card total">
+          <div class="val" id="statTotal">0</div>
+          <div class="lbl">Students</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="val" id="statFPS">0</div>
+          <div class="lbl">FPS</div>
+        </div>
+        <div class="stat-card green">
+          <div class="val" id="statAtt">0</div>
+          <div class="lbl">Attentive</div>
+        </div>
+        <div class="stat-card red">
+          <div class="val" id="statInatt">0</div>
+          <div class="lbl">Inattentive</div>
+        </div>
+      </div>
+
+      <div class="att-bar-wrap" style="margin-top:14px;">
+        <div class="att-label">
+          <span>Class Attention</span>
+          <span id="attPct">0%</span>
+        </div>
+        <div class="att-bar-bg">
+          <div class="att-bar-fill" id="attBar" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Teacher status -->
+    <div>
+      <h2>Teacher Context</h2>
+      <div class="teacher-status inactive" id="teacherStatus" style="margin-top:12px;">
+        <div class="t-dot"></div>
+        <span id="teacherText">Teacher away / no activity detected</span>
+      </div>
+    </div>
+
+    <!-- Attention history chart -->
+    <div>
+      <h2>Attention History</h2>
+      <canvas id="histChart"></canvas>
+    </div>
+
+    <!-- ── INPUT SOURCE SECTION ── -->
+    <div>
+      <h2>Input Source</h2>
+      <div class="input-source-section" style="margin-top:12px;">
+
+        <!-- Current active source -->
+        <div class="current-source" id="currentSourceDisplay">
+          Active: <span id="activeSourceLabel">Loading...</span>
+        </div>
+
+        <!-- Quick camera buttons -->
+        <div class="cam-btn-row">
+          <div class="cam-btn" id="btnCam0" onclick="switchToCamera(0)">
+            <div class="cam-icon">💻</div>
+            <div class="cam-label-text">Webcam</div>
+            <div class="cam-label-text" style="color:var(--muted);font-size:10px;">Cam 0</div>
+          </div>
+          <div class="cam-btn" id="btnCam1" onclick="switchToCamera(1)">
+            <div class="cam-icon">📷</div>
+            <div class="cam-label-text">Camera 1</div>
+            <div class="cam-label-text" style="color:var(--muted);font-size:10px;">External</div>
+          </div>
+        </div>
+
+        <!-- Upload video area -->
+        <div class="upload-area" id="uploadArea">
+          <input type="file" id="videoFileInput" accept="video/*" onchange="handleFileSelect(event)"/>
+          <div class="upload-icon">🎬</div>
+          <div class="upload-text"><strong>Upload Video</strong></div>
+          <div class="upload-text">Click or drag a video file here</div>
+          <div class="upload-text" style="margin-top:4px;font-size:10px;">MP4, AVI, MOV supported</div>
+          <div class="upload-progress" id="uploadProgress">
+            <div class="upload-progress-fill" id="uploadProgressFill"></div>
+          </div>
+        </div>
+
+        <!-- Status message -->
+        <div class="source-status" id="sourceStatus"></div>
+
+        <!-- Advanced toggle -->
+        <div class="advanced-toggle" onclick="toggleAdvanced()">
+          ⚙ Advanced — enter custom path or RTSP URL
+        </div>
+
+        <!-- Advanced panel -->
+        <div class="advanced-panel" id="advancedPanel">
+          <div class="source-row">
+            <label>Front</label>
+            <input id="srcFront" type="text" placeholder="0 or /path/to/video.mp4 or rtsp://..."/>
+          </div>
+          <div class="source-row">
+            <label>Back</label>
+            <input id="srcBack" type="text" placeholder="1 or teacher.mp4"/>
+          </div>
+          <button class="btn sm" onclick="applyAdvanced()">Apply</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Saved frames -->
+    <div>
+      <h2>Saved Frames</h2>
+      <div class="saved-grid" id="savedGrid" style="margin-top:12px;">
+        <span style="color:var(--muted);font-size:12px;">Loading...</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Chart setup ──────────────────────────────────────────────
+const ctx  = document.getElementById("histChart").getContext("2d");
+const MAX_HIST = 40;
+const histAtt   = [];
+const histInatt = [];
+
+function drawChart() {
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  const W = ctx.canvas.offsetWidth || 280;
+  const H = 110;
+  ctx.canvas.width  = W;
+  ctx.canvas.height = H;
+  const pad    = { l: 4, r: 4, t: 8, b: 8 };
+  const innerW = W - pad.l - pad.r;
+  const innerH = H - pad.t - pad.b;
+  const n      = histAtt.length;
+  if (n < 2) return;
+  const step = innerW / (MAX_HIST - 1);
+  const maxV = Math.max(...histAtt, ...histInatt, 1);
+  function toX(i) { return pad.l + (MAX_HIST - n + i) * step; }
+  function toY(v) { return pad.t + innerH - (v / maxV) * innerH; }
+  ctx.beginPath();
+  ctx.moveTo(toX(0), toY(histAtt[0]));
+  for (let i = 1; i < n; i++) ctx.lineTo(toX(i), toY(histAtt[i]));
+  ctx.lineTo(toX(n-1), H); ctx.lineTo(toX(0), H); ctx.closePath();
+  ctx.fillStyle = "rgba(46,160,67,0.25)"; ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(toX(0), toY(histAtt[0]));
+  for (let i = 1; i < n; i++) ctx.lineTo(toX(i), toY(histAtt[i]));
+  ctx.strokeStyle = "#2ea043"; ctx.lineWidth = 2; ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(toX(0), toY(histInatt[0]));
+  for (let i = 1; i < n; i++) ctx.lineTo(toX(i), toY(histInatt[i]));
+  ctx.strokeStyle = "#da3633"; ctx.lineWidth = 2; ctx.stroke();
+}
+
+// ── Stats polling ────────────────────────────────────────────
+async function pollStats() {
+  try {
+    const r = await fetch("/api/stats");
+    const d = await r.json();
+    document.getElementById("statTotal").textContent = d.total;
+    document.getElementById("statAtt").textContent   = d.attentive;
+    document.getElementById("statInatt").textContent = d.inattentive;
+    document.getElementById("statFPS").textContent   = d.fps;
+    document.getElementById("fps-tag").textContent   = d.fps + " fps";
+    document.getElementById("attPct").textContent    = d.attention_pct + "%";
+    document.getElementById("attBar").style.width    = d.attention_pct + "%";
+    const ts = document.getElementById("teacherStatus");
+    const tt = document.getElementById("teacherText");
+    if (d.teacher_active) {
+      ts.className = "teacher-status active";
+      tt.textContent = "Teacher active — board in use";
+    } else {
+      ts.className = "teacher-status inactive";
+      tt.textContent = "Teacher away / no activity detected";
+    }
+    histAtt.push(d.attentive);
+    histInatt.push(d.inattentive);
+    if (histAtt.length > MAX_HIST) { histAtt.shift(); histInatt.shift(); }
+    drawChart();
+  } catch(e) {}
+}
+setInterval(pollStats, 1000);
+pollStats();
+
+// ── Saved frames ─────────────────────────────────────────────
+async function loadSaved() {
+  try {
+    const r   = await fetch("/api/recordings");
+    const lst = await r.json();
+    const g   = document.getElementById("savedGrid");
+    if (!lst.length) {
+      g.innerHTML = '<span style="color:var(--muted);font-size:12px;">No saved frames yet.</span>';
+      return;
+    }
+    g.innerHTML = lst.map(f =>
+      `<img src="/saved_data/${f}" title="${f}"
+            onclick="previewSaved('/saved_data/${f}')"
+            onerror="this.style.display='none'"/>`
+    ).join("");
+  } catch(e) {}
+}
+function previewSaved(src) {
+  document.getElementById("savedPreview").src = src;
+  document.getElementById("savedPreviewCard").style.display = "block";
+}
+setInterval(loadSaved, 10000);
+loadSaved();
+
+// ── Source indicator ─────────────────────────────────────────
+let currentSource = "0";
+
+function updateSourceIndicator(label) {
+  document.getElementById("activeSourceLabel").textContent = label;
+  // Reset button states
+  document.getElementById("btnCam0").classList.remove("active-source");
+  document.getElementById("btnCam1").classList.remove("active-source");
+  if (label === "Webcam (Cam 0)") {
+    document.getElementById("btnCam0").classList.add("active-source");
+  } else if (label === "Camera 1 (External)") {
+    document.getElementById("btnCam1").classList.add("active-source");
+  }
+}
+
+function showStatus(msg, type) {
+  const el = document.getElementById("sourceStatus");
+  el.textContent = msg;
+  el.className = "source-status " + type;
+  setTimeout(() => { el.className = "source-status"; }, 4000);
+}
+
+// ── Switch to camera ─────────────────────────────────────────
+async function switchToCamera(camIndex) {
+  const label = camIndex === 0 ? "Webcam (Cam 0)" : "Camera 1 (External)";
+  showStatus("Switching to " + label + "...", "info");
+  try {
+    await fetch("/api/source", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ front: String(camIndex) }),
+    });
+    currentSource = String(camIndex);
+    updateSourceIndicator(label);
+    showStatus("Switched to " + label + " successfully.", "success");
+
+    // Reset upload area
+    const ua = document.getElementById("uploadArea");
+    ua.classList.remove("done");
+    document.getElementById("uploadProgress").style.display = "none";
+
+  } catch(e) {
+    showStatus("Error switching to camera.", "error");
+  }
+}
+
+// ── Upload video ─────────────────────────────────────────────
+function handleFileSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  uploadVideo(file);
+}
+
+// Drag and drop support
+const uploadArea = document.getElementById("uploadArea");
+
+uploadArea.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  uploadArea.classList.add("dragover");
+});
+uploadArea.addEventListener("dragleave", () => {
+  uploadArea.classList.remove("dragover");
+});
+uploadArea.addEventListener("drop", (e) => {
+  e.preventDefault();
+  uploadArea.classList.remove("dragover");
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith("video/")) {
+    uploadVideo(file);
+  } else {
+    showStatus("Please drop a valid video file.", "error");
+  }
+});
+
+async function uploadVideo(file) {
+  const progressBar  = document.getElementById("uploadProgress");
+  const progressFill = document.getElementById("uploadProgressFill");
+  const ua           = document.getElementById("uploadArea");
+
+  // Show progress
+  progressBar.style.display = "block";
+  progressFill.style.width  = "0%";
+  ua.classList.add("uploading");
+  showStatus("Uploading " + file.name + "...", "info");
+
+  const formData = new FormData();
+  formData.append("video", file);
+
+  try {
+    // Simulate progress while uploading
+    let prog = 0;
+    const progInterval = setInterval(() => {
+      prog = Math.min(prog + 8, 85);
+      progressFill.style.width = prog + "%";
+    }, 200);
+
+    const response = await fetch("/api/upload", {
+      method: "POST",
+      body: formData,
+    });
+
+    clearInterval(progInterval);
+    progressFill.style.width = "100%";
+
+    if (response.ok) {
+      const data = await response.json();
+      ua.classList.remove("uploading");
+      ua.classList.add("done");
+      currentSource = data.path;
+      updateSourceIndicator("📹 " + file.name);
+      showStatus("Video uploaded and playing: " + file.name, "success");
+
+      // Reset cam buttons
+      document.getElementById("btnCam0").classList.remove("active-source");
+      document.getElementById("btnCam1").classList.remove("active-source");
+    } else {
+      throw new Error("Upload failed");
+    }
+  } catch(e) {
+    ua.classList.remove("uploading");
+    progressFill.style.width = "0%";
+    showStatus("Upload failed. Check server is running.", "error");
+  }
+}
+
+// ── Advanced panel ───────────────────────────────────────────
+function toggleAdvanced() {
+  const panel = document.getElementById("advancedPanel");
+  panel.classList.toggle("open");
+}
+
+async function applyAdvanced() {
+  const front = document.getElementById("srcFront").value.trim();
+  const back  = document.getElementById("srcBack").value.trim();
+  if (!front && !back) {
+    showStatus("Enter at least one source.", "error");
+    return;
+  }
+  const body = {};
+  if (front) body.front = front;
+  if (back)  body.back  = back;
+  try {
+    await fetch("/api/source", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    updateSourceIndicator(front || currentSource);
+    showStatus("Custom source applied. Stream restarting...", "success");
+  } catch(e) {
+    showStatus("Error applying source.", "error");
+  }
+}
+
+// Set initial indicator on load
+updateSourceIndicator("Webcam (Cam 0)");
+document.getElementById("btnCam0").classList.add("active-source");
+</script>
+</body>
+</html>
